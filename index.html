@@ -314,9 +314,7 @@
       }
 
       #print-view h1 {
-        font-size: 18pt;
-        margin-bottom: 8mm;
-        text-align: center;
+        display: none;
       }
 
       .print-side {
@@ -325,12 +323,7 @@
       }
 
       .print-side .print-label {
-        font-size: 9pt;
-        font-weight: bold;
-        text-transform: uppercase;
-        letter-spacing: 1pt;
-        color: #555;
-        margin-bottom: 2mm;
+        display: none;
       }
 
       .print-side img {
@@ -342,10 +335,7 @@
       }
 
       .print-date {
-        margin-top: 6mm;
-        font-size: 8pt;
-        color: #777;
-        text-align: right;
+        display: none;
       }
     }
 
@@ -514,19 +504,13 @@
      Print-only layout (hidden on screen, shown by @media print)
 ════════════════════════════════════════════════════════════════════════ -->
 <div id="print-view" aria-hidden="true">
-  <h1>Credencial INE — Ambos lados</h1>
-
   <div class="print-side">
-    <div class="print-label">Frente</div>
     <img id="print-front" src="" alt="Frente INE">
   </div>
 
   <div class="print-side">
-    <div class="print-label">Reverso</div>
     <img id="print-back" src="" alt="Reverso INE">
   </div>
-
-  <div class="print-date" id="print-date"></div>
 </div>
 
 <!-- ═══════════════════════════════════════════════════════════════════════
@@ -685,8 +669,8 @@
     // Scale factor: video is cover-fitted
     const scaleX = vw / displayW;
     const scaleY = vh / displayH;
-    // For cover, the effective scale is the MAX (the dimension that fits exactly)
-    const coverScale = Math.max(scaleX, scaleY);
+    // For cover, the effective scale is the MIN (the dimension that fits exactly)
+    const coverScale = Math.min(scaleX, scaleY);
 
     // Video rendered size inside the container (may exceed container on one axis)
     const renderedW = vw / coverScale;
@@ -790,10 +774,6 @@
     // Populate print layout
     document.getElementById('print-front').src = state.frontDataUrl;
     document.getElementById('print-back').src  = state.backDataUrl;
-    document.getElementById('print-date').textContent =
-      'Generado el ' + new Date().toLocaleString('es-MX', {
-        dateStyle: 'long', timeStyle: 'short'
-      });
 
     showScreen('screen-result');
   }
