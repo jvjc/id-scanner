@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Escáner de INE</title>
+
+  <!--
+    Tailwind CSS Play CDN v3.4.16
+    Pinned via jsDelivr to avoid breaking changes.
+  -->
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/cdn@4.1.7/dist/index.global.min.js"></script>
+
+  <style>
+    /* ── Base ─────────────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: #0f172a;
+      color: #f1f5f9;
+      min-height: 100dvh;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      overflow-x: hidden;
+    }
+
+    /* ── Screens ──────────────────────────────────────────────────────────── */
+    .screen {
+      width: 100%;
+      max-width: 480px;
+      min-height: 100dvh;
+      padding: 32px 20px 40px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 18px;
+    }
+    .screen.hidden { display: none !important; }
+
+    /* ── Typography ───────────────────────────────────────────────────────── */
+    h1 { font-size: 26px; font-weight: 800; letter-spacing: -0.5px; text-align: center; }
+    h2 { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; text-align: center; }
+    .subtitle {
+      color: #94a3b8;
+      text-align: center;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    /* ── Buttons ──────────────────────────────────────────────────────────── */
+    .btn {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 14px 24px;
+      border-radius: 14px;
+      border: none;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;
+      width: 100%;
+      line-height: 1;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn:disabled { opacity: 0.5; pointer-events: none; }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(99,102,241,0.35);
+    }
+    .btn-primary:hover { box-shadow: 0 6px 28px rgba(99,102,241,0.5); transform: translateY(-1px); }
+
+    .btn-success {
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: #fff;
+      box-shadow: 0 4px 16px rgba(16,185,129,0.3);
+    }
+    .btn-success:hover { box-shadow: 0 6px 22px rgba(16,185,129,0.45); transform: translateY(-1px); }
+
+    .btn-ghost {
+      background: #1e293b;
+      color: #94a3b8;
+      border: 1px solid #334155;
+    }
+    .btn-ghost:hover { background: #263244; color: #f1f5f9; }
+
+    .btn-print {
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      color: #fff;
+      box-shadow: 0 4px 16px rgba(245,158,11,0.3);
+    }
+    .btn-print:hover { box-shadow: 0 6px 22px rgba(245,158,11,0.45); transform: translateY(-1px); }
+
+    .btn-row {
+      display: flex;
+      gap: 12px;
+      width: 100%;
+    }
+    .btn-row .btn { flex: 1; }
+
+    /* ── Progress dots ────────────────────────────────────────────────────── */
+    .progress-bar {
+      display: flex;
+      gap: 8px;
+      width: 100%;
+    }
+    .pdot {
+      flex: 1;
+      height: 4px;
+      border-radius: 2px;
+      background: #1e293b;
+      transition: background 0.4s;
+    }
+    .pdot.active   { background: #6366f1; }
+    .pdot.done     { background: #10b981; }
+
+    /* ── Camera view ──────────────────────────────────────────────────────── */
+    .cam-wrap {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      background: #000;
+      border-radius: 18px;
+      overflow: hidden;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+    }
+
+    #video {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      border-radius: inherit;
+      display: block;
+    }
+
+    /* ── Card guide overlay ───────────────────────────────────────────────── */
+    /*
+      Dims the area outside the card guide using a CSS radial-gradient mask.
+      The guide itself is a centred rectangle with corner markers.
+    */
+    .cam-dimmer {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      /* dim everything then cut out the card rectangle via clip-path on the guide */
+      background: rgba(0,0,0,0.45);
+      border-radius: inherit;
+    }
+
+    .card-guide {
+      position: absolute;
+      /* ID card ratio: 85.6 mm × 53.98 mm  →  ~1.586 : 1 */
+      width: 82%;
+      aspect-ratio: 85.6 / 53.98;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      border: 2.5px solid rgba(99,102,241,0.9);
+      border-radius: 10px;
+      pointer-events: none;
+      /* punch a transparent hole in the dimmer */
+      box-shadow: 0 0 0 2000px rgba(0,0,0,0.45);
+    }
+
+    /* Corner accent marks */
+    .cg-corner {
+      position: absolute;
+      width: 22px; height: 22px;
+      border-color: #6366f1;
+      border-style: solid;
+    }
+    .cg-corner.tl { top: -3px; left: -3px; border-width: 3px 0 0 3px; border-radius: 4px 0 0 0; }
+    .cg-corner.tr { top: -3px; right: -3px; border-width: 3px 3px 0 0; border-radius: 0 4px 0 0; }
+    .cg-corner.bl { bottom: -3px; left: -3px; border-width: 0 0 3px 3px; border-radius: 0 0 0 4px; }
+    .cg-corner.br { bottom: -3px; right: -3px; border-width: 0 3px 3px 0; border-radius: 0 0 4px 0; }
+
+    /* Scanning line inside guide */
+    .scan-beam {
+      position: absolute;
+      left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg,
+        transparent 0%,
+        rgba(99,102,241,0.6) 20%,
+        #a5b4fc 50%,
+        rgba(99,102,241,0.6) 80%,
+        transparent 100%
+      );
+      border-radius: 1px;
+      animation: scanBeam 2.4s ease-in-out infinite;
+      top: 5%;
+    }
+    @keyframes scanBeam {
+      0%   { top: 5%;  opacity: 0; }
+      10%  { opacity: 1; }
+      90%  { opacity: 1; }
+      100% { top: 92%; opacity: 0; }
+    }
+
+    /* ── Status badge ─────────────────────────────────────────────────────── */
+    .badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 7px 14px;
+      border-radius: 99px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .badge-info    { background: rgba(99,102,241,0.15); color: #a5b4fc; }
+    .badge-success { background: rgba(16,185,129,0.15); color: #34d399; }
+    .badge-warn    { background: rgba(251,191,36,0.15); color: #fbbf24; }
+
+    /* ── Preview card ─────────────────────────────────────────────────────── */
+    .preview-card {
+      width: 100%;
+      border-radius: 14px;
+      overflow: hidden;
+      border: 2px solid #1e293b;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    }
+    .preview-card img {
+      width: 100%;
+      display: block;
+      object-fit: contain;
+      background: #000;
+      /* Apply post-capture CSS enhancements:
+         contrast boost + mild brightness pull-down to cut glare highlights */
+      filter: contrast(1.18) brightness(0.97) saturate(1.08);
+    }
+    .preview-card .caption {
+      padding: 8px 14px;
+      background: #1e293b;
+      font-size: 12px;
+      color: #94a3b8;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+    }
+
+    /* ── Info list ────────────────────────────────────────────────────────── */
+    .info-box {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 14px;
+      padding: 16px 18px;
+      width: 100%;
+    }
+    .info-box li {
+      list-style: none;
+      color: #94a3b8;
+      font-size: 14px;
+      line-height: 1.5;
+      padding: 4px 0;
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+    .info-box li::before { content: "›"; color: #6366f1; font-size: 18px; line-height: 1.2; }
+
+    /* ── Logo / hero ──────────────────────────────────────────────────────── */
+    .hero-icon {
+      font-size: 68px;
+      line-height: 1;
+      filter: drop-shadow(0 0 24px rgba(99,102,241,0.4));
+    }
+
+    /* ── Divider ──────────────────────────────────────────────────────────── */
+    .divider {
+      width: 100%;
+      height: 1px;
+      background: #1e293b;
+    }
+
+    /* ── Processing overlay ───────────────────────────────────────────────── */
+    #processing-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(15,23,42,0.85);
+      z-index: 100;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+    }
+    #processing-overlay.visible { display: flex; }
+    .spinner {
+      width: 48px; height: 48px;
+      border: 4px solid #334155;
+      border-top-color: #6366f1;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Print styles ─────────────────────────────────────────────────────── */
+    @media print {
+      body { background: #fff; display: block; }
+
+      /* Hide everything that isn't the print layout */
+      .screen,
+      #processing-overlay,
+      #print-btn-row { display: none !important; }
+
+      #print-view {
+        display: block !important;
+        padding: 12mm;
+        font-family: Arial, Helvetica, sans-serif;
+        color: #000;
+      }
+
+      #print-view h1 {
+        font-size: 18pt;
+        margin-bottom: 8mm;
+        text-align: center;
+      }
+
+      .print-side {
+        page-break-inside: avoid;
+        margin-bottom: 8mm;
+      }
+
+      .print-side .print-label {
+        font-size: 9pt;
+        font-weight: bold;
+        text-transform: uppercase;
+        letter-spacing: 1pt;
+        color: #555;
+        margin-bottom: 2mm;
+      }
+
+      .print-side img {
+        width: 85.6mm;
+        height: auto;
+        display: block;
+        /* preserve the visual enhancement for print */
+        filter: contrast(1.18) brightness(0.97) saturate(1.08);
+      }
+
+      .print-date {
+        margin-top: 6mm;
+        font-size: 8pt;
+        color: #777;
+        text-align: right;
+      }
+    }
+
+    /* Hidden on screen, visible only at print time */
+    #print-view { display: none; }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     Processing overlay
+════════════════════════════════════════════════════════════════════════ -->
+<div id="processing-overlay" role="status" aria-live="polite">
+  <div class="spinner"></div>
+  <p style="color:#94a3b8;font-size:14px;">Procesando imagen…</p>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     SCREEN 1 — Welcome
+════════════════════════════════════════════════════════════════════════ -->
+<div id="screen-welcome" class="screen">
+  <div class="hero-icon" aria-hidden="true">🪪</div>
+
+  <h1>Escáner de INE</h1>
+  <p class="subtitle">
+    Escanea los dos lados de tu credencial del INE.<br>
+    Todo el procesamiento ocurre en tu dispositivo.
+  </p>
+
+  <ul class="info-box">
+    <li>Primero capturaremos el <strong style="color:#f1f5f9">frente</strong> de tu INE</li>
+    <li>Luego el <strong style="color:#f1f5f9">reverso</strong></li>
+    <li>Podrás revisar cada imagen antes de continuar</li>
+    <li>Al finalizar podrás <strong style="color:#f1f5f9">imprimir</strong> el resultado</li>
+  </ul>
+
+  <button class="btn btn-primary" id="btn-start" onclick="startApp()">
+    <span aria-hidden="true">📷</span> Comenzar escaneo
+  </button>
+
+  <p class="subtitle" style="font-size:12px;">
+    Se solicitará acceso a tu cámara al presionar "Comenzar".
+  </p>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     SCREEN 2 — Scan (reused for front AND back via JS)
+════════════════════════════════════════════════════════════════════════ -->
+<div id="screen-scan" class="screen hidden">
+  <div class="progress-bar" id="scan-progress-bar">
+    <div class="pdot active" id="sdot-1"></div>
+    <div class="pdot"        id="sdot-2"></div>
+    <div class="pdot"        id="sdot-3"></div>
+  </div>
+
+  <h2 id="scan-title">Escanear Frente</h2>
+  <p class="subtitle" id="scan-subtitle">
+    Coloca el <strong>frente</strong> de tu INE dentro del marco verde
+  </p>
+
+  <!-- Camera -->
+  <div class="cam-wrap" id="cam-wrap">
+    <video id="video" autoplay playsinline muted></video>
+    <div class="cam-dimmer"></div>
+    <div class="card-guide" id="card-guide" role="img" aria-label="Marco guía para la credencial">
+      <div class="cg-corner tl" aria-hidden="true"></div>
+      <div class="cg-corner tr" aria-hidden="true"></div>
+      <div class="cg-corner bl" aria-hidden="true"></div>
+      <div class="cg-corner br" aria-hidden="true"></div>
+      <div class="scan-beam"   aria-hidden="true"></div>
+    </div>
+  </div>
+
+  <div class="badge badge-info" id="scan-badge">
+    <span aria-hidden="true">⚡</span>
+    <span id="scan-badge-text">Centra tu INE dentro del marco</span>
+  </div>
+
+  <button class="btn btn-primary" id="btn-capture" onclick="captureFrame()">
+    <span aria-hidden="true">📸</span>
+    <span id="btn-capture-label">Capturar Frente</span>
+  </button>
+
+  <button class="btn btn-ghost" onclick="cancelScan()">
+    Cancelar
+  </button>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     SCREEN 3 — Preview (reused for front AND back)
+════════════════════════════════════════════════════════════════════════ -->
+<div id="screen-preview" class="screen hidden">
+  <div class="progress-bar" id="prev-progress-bar">
+    <div class="pdot done"   id="pdot-1"></div>
+    <div class="pdot active" id="pdot-2"></div>
+    <div class="pdot"        id="pdot-3"></div>
+  </div>
+
+  <h2 id="prev-title">Verificar Frente</h2>
+  <p class="subtitle">¿La imagen se ve clara y legible?</p>
+
+  <div class="preview-card">
+    <img id="preview-img" src="" alt="Vista previa de la INE capturada">
+    <div class="caption" id="preview-caption">✅ Frente capturado</div>
+  </div>
+
+  <div class="badge badge-warn" style="font-size:12px;">
+    <span aria-hidden="true">💡</span>
+    Asegúrate de que el texto sea legible y no haya reflejos
+  </div>
+
+  <div class="btn-row">
+    <button class="btn btn-ghost" onclick="retake()">
+      <span aria-hidden="true">🔄</span> Retomar
+    </button>
+    <button class="btn btn-success" id="btn-preview-next" onclick="previewNext()">
+      Siguiente <span aria-hidden="true">→</span>
+    </button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     SCREEN 4 — Result
+════════════════════════════════════════════════════════════════════════ -->
+<div id="screen-result" class="screen hidden">
+  <div class="progress-bar">
+    <div class="pdot done"></div>
+    <div class="pdot done"></div>
+    <div class="pdot done"></div>
+  </div>
+
+  <div class="badge badge-success">
+    <span aria-hidden="true">✅</span> Escaneo completado
+  </div>
+
+  <h2>Resultado Final</h2>
+
+  <div class="preview-card">
+    <div class="caption">Frente de la INE</div>
+    <img id="result-front" src="" alt="Frente de la INE escaneado">
+  </div>
+
+  <div class="preview-card">
+    <div class="caption">Reverso de la INE</div>
+    <img id="result-back" src="" alt="Reverso de la INE escaneado">
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="btn-row" id="print-btn-row">
+    <button class="btn btn-ghost" onclick="restart()">
+      <span aria-hidden="true">🔄</span> Reiniciar
+    </button>
+    <button class="btn btn-print" onclick="doPrint()">
+      <span aria-hidden="true">🖨️</span> Imprimir
+    </button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     Hidden capture canvas
+════════════════════════════════════════════════════════════════════════ -->
+<canvas id="capture-canvas" style="display:none;" aria-hidden="true"></canvas>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     Print-only layout (hidden on screen, shown by @media print)
+════════════════════════════════════════════════════════════════════════ -->
+<div id="print-view" aria-hidden="true">
+  <h1>Credencial INE — Ambos lados</h1>
+
+  <div class="print-side">
+    <div class="print-label">Frente</div>
+    <img id="print-front" src="" alt="Frente INE">
+  </div>
+
+  <div class="print-side">
+    <div class="print-label">Reverso</div>
+    <img id="print-back" src="" alt="Reverso INE">
+  </div>
+
+  <div class="print-date" id="print-date"></div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     App script
+════════════════════════════════════════════════════════════════════════ -->
+<script>
+  'use strict';
+
+  /* ── State ──────────────────────────────────────────────────────────── */
+  const state = {
+    side: 'front',          // 'front' | 'back'
+    frontDataUrl: null,
+    backDataUrl: null,
+    stream: null,
+  };
+
+  /* ── Helpers ─────────────────────────────────────────────────────────── */
+  function showScreen(id) {
+    document.querySelectorAll('.screen').forEach(el => el.classList.add('hidden'));
+    document.getElementById(id).classList.remove('hidden');
+    // Scroll to top on mobile
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }
+
+  function showProcessing(visible) {
+    const el = document.getElementById('processing-overlay');
+    el.classList.toggle('visible', visible);
+  }
+
+  function stopStream() {
+    if (state.stream) {
+      state.stream.getTracks().forEach(t => t.stop());
+      state.stream = null;
+    }
+  }
+
+  /* ── Camera ──────────────────────────────────────────────────────────── */
+  async function openCamera() {
+    stopStream();
+    const constraints = {
+      video: {
+        facingMode: { ideal: 'environment' },
+        width:  { ideal: 1920, min: 640 },
+        height: { ideal: 1080, min: 480 },
+      },
+      audio: false,
+    };
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      state.stream = stream;
+      const video = document.getElementById('video');
+      video.srcObject = stream;
+      await video.play();
+    } catch (err) {
+      stopProcessing();
+      let msg = 'No se pudo acceder a la cámara.';
+      if (err.name === 'NotAllowedError') {
+        msg = 'Permiso de cámara denegado.\nPor favor, permite el acceso a la cámara en tu navegador e intenta de nuevo.';
+      } else if (err.name === 'NotFoundError') {
+        msg = 'No se encontró ninguna cámara en este dispositivo.';
+      } else {
+        msg = `No se pudo acceder a la cámara.\n${err.message}`;
+      }
+      alert(msg);
+      showScreen('screen-welcome');
+      throw err;
+    }
+  }
+
+  /* ── Screen: Welcome → Scan ──────────────────────────────────────────── */
+  async function startApp() {
+    state.side = 'front';
+    setScanScreenForSide('front');
+    showScreen('screen-scan');
+    await openCamera();
+  }
+
+  /* ── Configure scan screen labels for the current side ──────────────── */
+  function setScanScreenForSide(side) {
+    const isFront = side === 'front';
+
+    document.getElementById('scan-title').textContent =
+      isFront ? 'Escanear Frente' : 'Escanear Reverso';
+
+    document.getElementById('scan-subtitle').innerHTML =
+      isFront
+        ? 'Coloca el <strong>frente</strong> de tu INE dentro del marco'
+        : 'Voltea tu INE y coloca el <strong>reverso</strong> dentro del marco';
+
+    document.getElementById('scan-badge-text').textContent =
+      isFront ? 'Centra tu INE dentro del marco' : 'Voltea tu INE y centra el reverso';
+
+    document.getElementById('btn-capture-label').textContent =
+      isFront ? 'Capturar Frente' : 'Capturar Reverso';
+
+    // Progress dots
+    document.getElementById('sdot-1').className = isFront ? 'pdot active' : 'pdot done';
+    document.getElementById('sdot-2').className = isFront ? 'pdot'        : 'pdot active';
+    document.getElementById('sdot-3').className = 'pdot';
+  }
+
+  /* ── Capture current video frame ─────────────────────────────────────── */
+  async function captureFrame() {
+    const video = document.getElementById('video');
+    if (!video.videoWidth) {
+      alert('La cámara aún no está lista. Espera un momento e intenta de nuevo.');
+      return;
+    }
+
+    showProcessing(true);
+
+    // Small delay to let the overlay render before heavy canvas work
+    await sleep(60);
+
+    try {
+      const dataUrl = await processVideoFrame(video);
+
+      stopStream();
+
+      if (state.side === 'front') {
+        state.frontDataUrl = dataUrl;
+        setPreviewScreen('front', dataUrl);
+      } else {
+        state.backDataUrl = dataUrl;
+        setPreviewScreen('back', dataUrl);
+      }
+
+      showScreen('screen-preview');
+    } finally {
+      showProcessing(false);
+    }
+  }
+
+  /* ── Image processing ────────────────────────────────────────────────── */
+  /**
+   * Captures the portion of the video that corresponds to the card guide
+   * and applies glare-reduction + contrast enhancement via Canvas 2D filters.
+   *
+   * We use the browser's built-in CSS filter engine (GPU-accelerated) rather
+   * than slow per-pixel JavaScript loops.
+   */
+  async function processVideoFrame(video) {
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+
+    // ── 1. Calculate card guide crop region in VIDEO-pixel coordinates ──
+    //
+    // The card guide is 82% of the cam-wrap width and centred.
+    // The video uses object-fit:cover, so we must account for how the video
+    // is scaled and offset inside the container.
+    const camWrap = document.getElementById('cam-wrap');
+    const displayW = camWrap.clientWidth;
+    const displayH = camWrap.clientHeight;
+
+    // Scale factor: video is cover-fitted
+    const scaleX = vw / displayW;
+    const scaleY = vh / displayH;
+    // For cover, the effective scale is the MAX (the dimension that fits exactly)
+    const coverScale = Math.max(scaleX, scaleY);
+
+    // Video rendered size inside the container (may exceed container on one axis)
+    const renderedW = vw / coverScale;
+    const renderedH = vh / coverScale;
+
+    // Offset of rendered video inside container (negative = cropped out)
+    const offsetX = (renderedW - displayW) / 2;  // display pixels cropped on each side
+    const offsetY = (renderedH - displayH) / 2;
+
+    // Card guide: 82% width of displayW, centred, aspect ratio 85.6/53.98
+    const guideDisplayW = displayW * 0.82;
+    const guideDisplayH = guideDisplayW * (53.98 / 85.6);
+    const guideDisplayX = (displayW - guideDisplayW) / 2;
+    const guideDisplayY = (displayH - guideDisplayH) / 2;
+
+    // Convert guide coordinates from display pixels → video pixels
+    const cropX = Math.round((guideDisplayX + offsetX) * coverScale);
+    const cropY = Math.round((guideDisplayY + offsetY) * coverScale);
+    const cropW = Math.round(guideDisplayW * coverScale);
+    const cropH = Math.round(guideDisplayH * coverScale);
+
+    // ── 2. Draw cropped region to a canvas ─────────────────────────────
+    const canvas = document.getElementById('capture-canvas');
+    // Output at 2× guide display size for good print quality
+    const outW = Math.min(cropW, 1200);
+    const outH = Math.round(outW * (53.98 / 85.6));
+    canvas.width  = outW;
+    canvas.height = outH;
+
+    const ctx = canvas.getContext('2d');
+
+    // ── 3. Apply glare reduction + enhancement via CSS filter ───────────
+    //
+    // contrast(1.22) — punches up text and edges
+    // brightness(0.94) — pulls highlights down to reduce glare hot-spots
+    // saturate(1.10) — restores colour vibrancy lost from brightness reduction
+    //
+    // These three together closely mimic "document scan" output without
+    // needing per-pixel processing.
+    ctx.filter = 'contrast(1.22) brightness(0.94) saturate(1.10)';
+
+    ctx.drawImage(video,
+      cropX, cropY, cropW, cropH,   // source rect from video
+      0,     0,     outW,  outH     // destination on canvas
+    );
+
+    ctx.filter = 'none';
+
+    return canvas.toDataURL('image/jpeg', 0.93);
+  }
+
+  /* ── Set preview screen ──────────────────────────────────────────────── */
+  function setPreviewScreen(side, dataUrl) {
+    const isFront = side === 'front';
+
+    document.getElementById('prev-title').textContent =
+      isFront ? 'Verificar Frente' : 'Verificar Reverso';
+
+    document.getElementById('preview-img').src = dataUrl;
+
+    document.getElementById('preview-caption').textContent =
+      isFront ? '✅ Frente capturado' : '✅ Reverso capturado';
+
+    document.getElementById('btn-preview-next').innerHTML =
+      isFront
+        ? 'Continuar <span aria-hidden="true">→</span>'
+        : '<span aria-hidden="true">✔</span> Finalizar';
+
+    // Progress dots for preview screen
+    document.getElementById('pdot-1').className = 'pdot done';
+    document.getElementById('pdot-2').className = isFront ? 'pdot active' : 'pdot done';
+    document.getElementById('pdot-3').className = isFront ? 'pdot'        : 'pdot active';
+  }
+
+  /* ── Preview: "Next" button ──────────────────────────────────────────── */
+  async function previewNext() {
+    if (state.side === 'front') {
+      // Move to back scan
+      state.side = 'back';
+      setScanScreenForSide('back');
+      showScreen('screen-scan');
+      await openCamera();
+    } else {
+      // Both sides done → show result
+      showResultScreen();
+    }
+  }
+
+  /* ── Preview: Retake ─────────────────────────────────────────────────── */
+  async function retake() {
+    setScanScreenForSide(state.side);
+    showScreen('screen-scan');
+    await openCamera();
+  }
+
+  /* ── Result screen ───────────────────────────────────────────────────── */
+  function showResultScreen() {
+    document.getElementById('result-front').src = state.frontDataUrl;
+    document.getElementById('result-back').src  = state.backDataUrl;
+
+    // Populate print layout
+    document.getElementById('print-front').src = state.frontDataUrl;
+    document.getElementById('print-back').src  = state.backDataUrl;
+    document.getElementById('print-date').textContent =
+      'Generado el ' + new Date().toLocaleString('es-MX', {
+        dateStyle: 'long', timeStyle: 'short'
+      });
+
+    showScreen('screen-result');
+  }
+
+  /* ── Print ───────────────────────────────────────────────────────────── */
+  function doPrint() {
+    window.print();
+  }
+
+  /* ── Cancel / Restart ───────────────────────────────────────────────── */
+  function cancelScan() {
+    stopStream();
+    showScreen('screen-welcome');
+  }
+
+  function restart() {
+    stopStream();
+    state.frontDataUrl = null;
+    state.backDataUrl  = null;
+    state.side         = 'front';
+    showScreen('screen-welcome');
+  }
+
+  /* ── Utility ─────────────────────────────────────────────────────────── */
+  function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /* ── Guard: browser must support getUserMedia ────────────────────────── */
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    document.getElementById('btn-start').disabled = true;
+    document.getElementById('btn-start').textContent = '⚠️ Cámara no soportada';
+    const note = document.createElement('p');
+    note.className = 'subtitle';
+    note.style.color = '#f87171';
+    note.textContent =
+      'Tu navegador no soporta acceso a la cámara. ' +
+      'Usa Chrome, Safari o Firefox actualizado y accede por HTTPS.';
+    document.getElementById('screen-welcome').appendChild(note);
+  }
+</script>
+</body>
+</html>
